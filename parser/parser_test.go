@@ -78,3 +78,51 @@ func checkParseErrors(t *testing.T, p *Parser) {
 		t.FailNow()
 	}
 }
+
+func TestIdentifierExpressions(t *testing.T) {
+	input := `foobar;`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParseErrors(t, p)
+
+	assert.Len(t, program.Statements, 1)
+
+	expStmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	assert.True(t, ok)
+
+	ident, ok := expStmt.Expression.(*ast.Identifier)
+	assert.NotNil(t, ident)
+	assert.True(t, ok)
+	if ident == nil {
+		t.FailNow()
+	}
+
+	assert.Equal(t, "foobar", ident.Value)
+	assert.Equal(t, "foobar", ident.TokenLiteral())
+}
+
+func TestIntegerExpressions(t *testing.T) {
+	input := `5;`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParseErrors(t, p)
+
+	assert.Len(t, program.Statements, 1)
+
+	expStmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	assert.True(t, ok)
+
+	ident, ok := expStmt.Expression.(*ast.IntegerLiteral)
+	assert.NotNil(t, ident)
+	assert.True(t, ok)
+	if ident == nil {
+		t.FailNow()
+	}
+
+	assert.Equal(t, int64(5), ident.Value)
+	assert.Equal(t, "5", ident.TokenLiteral())
+}
