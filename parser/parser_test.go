@@ -52,10 +52,29 @@ func testLiteralExpression(
 		testIntegerLiteral(t, exp, v)
 	case string:
 		testIdentifier(t, exp, v)
+	case bool:
+		testBoolean(t, exp, v)
 	default:
 		t.Errorf("Canot handle type %T", exp)
 		t.FailNow()
 	}
+}
+
+func testBoolean(t *testing.T, inExp ast.Expression, value bool) {
+	assert.NotNil(t, inExp)
+	if inExp == nil {
+		t.FailNow()
+	}
+
+	exp, ok := inExp.(*ast.Boolean)
+	assert.NotNil(t, exp)
+	assert.True(t, ok)
+	if exp == nil {
+		t.FailNow()
+	}
+
+	assert.Equal(t, value, exp.Value)
+	assert.Equal(t, fmt.Sprintf("%v", value), exp.TokenLiteral())
 }
 
 func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) {
@@ -193,12 +212,14 @@ func TestIntegerExpressions(t *testing.T) {
 
 func TestParsePrefixExpressions(t *testing.T) {
 	prefixTests := []struct {
-		input        string
-		operator     string
-		integerValue int64
+		input    string
+		operator string
+		value    interface{}
 	}{
 		{"!5;", "!", 5},
 		{"-15;", "-", 15},
+		{"!true", "!", true},
+		{"!false", "!", false},
 	}
 
 	for _, tt := range prefixTests {
@@ -220,16 +241,16 @@ func TestParsePrefixExpressions(t *testing.T) {
 		}
 
 		assert.Equal(t, tt.operator, exp.Operator)
-		testLiteralExpression(t, exp.Right, tt.integerValue)
+		testLiteralExpression(t, exp.Right, tt.value)
 	}
 }
 
 func TestParsingInfixExpressions(t *testing.T) {
 	infixTests := []struct {
 		input      string
-		leftValue  int64
+		leftValue  interface{}
 		operator   string
-		rightValue int64
+		rightValue interface{}
 	}{
 		{"5 + 6;", 5, "+", 6},
 		{"5 - 6;", 5, "-", 6},
@@ -239,6 +260,8 @@ func TestParsingInfixExpressions(t *testing.T) {
 		{"5 < 6;", 5, "<", 6},
 		{"5 == 6;", 5, "==", 6},
 		{"5 != 6;", 5, "!=", 6},
+		{"true == true;", true, "==", true},
+		{"true != false", true, "!=", false},
 	}
 
 	for _, tt := range infixTests {
@@ -274,6 +297,15 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		{"5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"},
 		{"5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"},
 		{"3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"},
+		{"true", "true"},
+		{"false", "false"},
+		{"3 > 5 == false", "((3 > 5) == false)"},
+		{"3 < 5 == true", "((3 < 5) == true)"},
+		{"1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"},
+		{"(5 + 5) * 2", "((5 + 5) * 2)"},
+		{"2 / (5 + 5)", "(2 / (5 + 5))"},
+		{"-(5 + 5)", "(-(5 + 5))"},
+		{"!(true == true)", "(!(true == true))"},
 	}
 
 	for _, tt := range tests {
@@ -283,5 +315,31 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		checkParseErrors(t, p)
 
 		assert.Equal(t, tt.expected, program.String())
+	}
+}
+
+func TestBoolExpressions(t *testing.T) {
+	tests := []struct {
+		input string
+		value bool
+	}{
+		{"true", true},
+		{"true;", true},
+		{"false", false},
+		{"false;", false},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParseErrors(t, p)
+
+		assert.Len(t, program.Statements, 1)
+
+		expStmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+		assert.True(t, ok)
+
+		testLiteralExpression(t, expStmt.Expression, tt.value)
 	}
 }
