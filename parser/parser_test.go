@@ -118,49 +118,55 @@ func testInfixExpression(t *testing.T, inExp ast.Expression, left interface{}, o
 }
 
 func TestLetStatements(t *testing.T) {
-	input := ` let x = 5;
-	let y = 10;
-	let foobar = 838383;`
-
-	l := lexer.New(input)
-	p := New(l)
-
-	program := p.ParseProgram()
-	checkParseErrors(t, p)
-
-	assert.Len(t, program.Statements, 3)
-
 	tests := []struct {
+		input              string
 		expectedIdentifier string
+		expectedValue      interface{}
 	}{
-		{"x"},
-		{"y"},
-		{"foobar"},
+		{"let x = 5;", "x", 5},
+		{"let y = true;", "y", true},
+		{"let foobar = y;", "foobar", "y"},
 	}
 
-	for i, tt := range tests {
-		stmt := program.Statements[i]
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+
+		program := p.ParseProgram()
+		checkParseErrors(t, p)
+
+		assert.Len(t, program.Statements, 1)
+
+		stmt := program.Statements[0]
 		testLetStatement(t, tt.expectedIdentifier, stmt)
+		testLiteralExpression(t, stmt.(*ast.LetStatement).Value, tt.expectedValue)
 	}
 }
 
 func TestReturnStatements(t *testing.T) {
-	input := `return 5;
-	return 10;
-	return 1911;`
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{"return 5;", 5},
+		{"return 10", 10},
+		{"return 1911;", 1911},
+	}
 
-	l := lexer.New(input)
-	p := New(l)
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
 
-	program := p.ParseProgram()
-	checkParseErrors(t, p)
+		program := p.ParseProgram()
+		checkParseErrors(t, p)
 
-	assert.Len(t, program.Statements, 3)
+		assert.Len(t, program.Statements, 1)
 
-	for _, stmt := range program.Statements {
+		stmt := program.Statements[0]
 		assert.IsType(t, &ast.ReturnStatement{}, stmt)
 		returnStmt := stmt.(*ast.ReturnStatement)
 		assert.Equal(t, "return", returnStmt.TokenLiteral())
+		testLiteralExpression(t, returnStmt.ReturnValue, tt.expected)
 	}
 }
 
@@ -306,6 +312,9 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		{"2 / (5 + 5)", "(2 / (5 + 5))"},
 		{"-(5 + 5)", "(-(5 + 5))"},
 		{"!(true == true)", "(!(true == true))"},
+		{"a + add(b * c) + d", "((a + add((b * c))) + d)"},
+		{"add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))"},
+		{"add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"},
 	}
 
 	for _, tt := range tests {
@@ -472,4 +481,31 @@ func TestFunctionParametersParsing(t *testing.T) {
 			testLiteralExpression(t, function.Parameters[i], param)
 		}
 	}
+}
+
+func TestCallExpressionParsing(t *testing.T) {
+	input := `add(1, 2  * 3, 4 + 5)`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParseErrors(t, p)
+
+	assert.Len(t, program.Statements, 1)
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	assert.NotNil(t, stmt)
+	assert.True(t, ok)
+
+	call, ok := stmt.Expression.(*ast.CallExpression)
+	assert.NotNil(t, call)
+	assert.True(t, ok)
+
+	testIdentifier(t, call.Function, "add")
+
+	assert.Len(t, call.Arguments, 3)
+
+	testLiteralExpression(t, call.Arguments[0], 1)
+
+	testInfixExpression(t, call.Arguments[1], 2, "*", 3)
+	testInfixExpression(t, call.Arguments[2], 4, "+", 5)
 }
