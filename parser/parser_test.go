@@ -343,3 +343,70 @@ func TestBoolExpressions(t *testing.T) {
 		testLiteralExpression(t, expStmt.Expression, tt.value)
 	}
 }
+
+func TestIfExpression(t *testing.T) {
+	input := `if (x < y) { x }`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParseErrors(t, p)
+
+	assert.Len(t, program.Statements, 1)
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	assert.NotNil(t, stmt)
+	assert.True(t, ok)
+
+	exp, ok := stmt.Expression.(*ast.IfExpression)
+	assert.NotNil(t, exp)
+	assert.True(t, ok)
+
+	testInfixExpression(t, exp.Condition, "x", "<", "y")
+	assert.Len(t, exp.Consequence.Statements, 1)
+
+	consequence, ok := exp.Consequence.Statements[0].(*ast.ExpressionStatement)
+	assert.NotNil(t, consequence)
+	assert.True(t, ok)
+
+	testIdentifier(t, consequence.Expression, "x")
+
+	assert.Nil(t, exp.Alternative)
+}
+
+func TestIfElseExpression(t *testing.T) {
+	input := `if (x < y) { x } else { y }`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParseErrors(t, p)
+
+	assert.Len(t, program.Statements, 1)
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	assert.NotNil(t, stmt)
+	assert.True(t, ok)
+
+	exp, ok := stmt.Expression.(*ast.IfExpression)
+	assert.NotNil(t, exp)
+	assert.True(t, ok)
+
+	testInfixExpression(t, exp.Condition, "x", "<", "y")
+	assert.Len(t, exp.Consequence.Statements, 1)
+
+	consequence, ok := exp.Consequence.Statements[0].(*ast.ExpressionStatement)
+	assert.NotNil(t, consequence)
+	assert.True(t, ok)
+	testIdentifier(t, consequence.Expression, "x")
+
+	assert.NotNil(t, exp.Alternative)
+	if exp.Alternative == nil {
+		t.FailNow()
+	}
+
+	alternative, ok := exp.Alternative.Statements[0].(*ast.ExpressionStatement)
+	assert.NotNil(t, alternative)
+	assert.True(t, ok)
+	testIdentifier(t, alternative.Expression, "y")
+}
