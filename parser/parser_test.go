@@ -12,11 +12,11 @@ import (
 func checkParseErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 
-	assert.Len(t, errors, 0)
-
 	for _, msg := range errors {
 		t.Errorf("parser error: %s", msg)
 	}
+
+	assert.Len(t, errors, 0)
 
 	if len(errors) > 0 {
 		t.FailNow()
