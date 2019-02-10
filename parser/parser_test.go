@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Gonzih/go-interpreter/ast"
@@ -125,4 +126,45 @@ func TestIntegerExpressions(t *testing.T) {
 
 	assert.Equal(t, int64(5), ident.Value)
 	assert.Equal(t, "5", ident.TokenLiteral())
+}
+
+func TestParsePrefixExpressions(t *testing.T) {
+	prefixTests := []struct {
+		input        string
+		operator     string
+		integerValue int64
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+	}
+
+	for _, tt := range prefixTests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParseErrors(t, p)
+
+		assert.Len(t, program.Statements, 1)
+
+		expStmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+		assert.True(t, ok)
+
+		exp, ok := expStmt.Expression.(*ast.PrefixExpression)
+		assert.NotNil(t, exp)
+		assert.True(t, ok)
+		if exp == nil {
+			t.FailNow()
+		}
+
+		assert.Equal(t, tt.operator, exp.Operator)
+	}
+}
+
+func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) {
+	integ, ok := il.(*ast.IntegerLiteral)
+	assert.NotNil(t, integ)
+	assert.True(t, ok)
+
+	assert.Equal(t, value, integ.Value)
+	assert.Equal(t, fmt.Sprintf("%d", value), integ.TokenLiteral())
 }
