@@ -9,6 +9,95 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func checkParseErrors(t *testing.T, p *Parser) {
+	errors := p.Errors()
+
+	assert.Len(t, errors, 0)
+
+	for _, msg := range errors {
+		t.Errorf("parser error: %s", msg)
+	}
+
+	if len(errors) > 0 {
+		t.FailNow()
+	}
+}
+
+func testIdentifier(t *testing.T, exp ast.Expression, value string) {
+	assert.NotNil(t, exp)
+	if exp == nil {
+		t.FailNow()
+	}
+
+	ident, ok := exp.(*ast.Identifier)
+	assert.NotNil(t, ident)
+	assert.True(t, ok)
+	if ident == nil {
+		t.FailNow()
+	}
+
+	assert.Equal(t, value, ident.Value)
+	assert.Equal(t, value, ident.TokenLiteral())
+}
+
+func testLiteralExpression(
+	t *testing.T,
+	exp ast.Expression,
+	expected interface{},
+) {
+	switch v := expected.(type) {
+	case int:
+		testIntegerLiteral(t, exp, int64(v))
+	case int64:
+		testIntegerLiteral(t, exp, v)
+	case string:
+		testIdentifier(t, exp, v)
+	default:
+		t.Errorf("Canot handle type %T", exp)
+		t.FailNow()
+	}
+}
+
+func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) {
+	assert.NotNil(t, il)
+	if il == nil {
+		t.FailNow()
+	}
+
+	integ, ok := il.(*ast.IntegerLiteral)
+	assert.NotNil(t, integ)
+	assert.True(t, ok)
+	if integ == nil {
+		t.FailNow()
+	}
+
+	assert.Equal(t, value, integ.Value)
+	assert.Equal(t, fmt.Sprintf("%d", value), integ.TokenLiteral())
+}
+
+func testLetStatement(t *testing.T, name string, s ast.Statement) {
+	assert.Equal(t, "let", s.TokenLiteral())
+	assert.IsType(t, &ast.LetStatement{}, s)
+
+	letStmt := s.(*ast.LetStatement)
+
+	assert.Equal(t, name, letStmt.Name.Value)
+	assert.Equal(t, name, letStmt.Name.TokenLiteral())
+}
+
+func testInfixExpression(t *testing.T, inExp ast.Expression, left interface{}, operator string, right interface{}) {
+	exp, ok := inExp.(*ast.InfixExpression)
+	assert.NotNil(t, exp)
+	assert.True(t, ok)
+	if exp == nil {
+		t.FailNow()
+	}
+
+	testLiteralExpression(t, exp.Left, left)
+	assert.Equal(t, exp.Operator, operator)
+	testLiteralExpression(t, exp.Right, right)
+}
+
 func TestLetStatements(t *testing.T) {
 	input := ` let x = 5;
 	let y = 10;
@@ -36,16 +125,6 @@ func TestLetStatements(t *testing.T) {
 	}
 }
 
-func testLetStatement(t *testing.T, name string, s ast.Statement) {
-	assert.Equal(t, "let", s.TokenLiteral())
-	assert.IsType(t, &ast.LetStatement{}, s)
-
-	letStmt := s.(*ast.LetStatement)
-
-	assert.Equal(t, name, letStmt.Name.Value)
-	assert.Equal(t, name, letStmt.Name.TokenLiteral())
-}
-
 func TestReturnStatements(t *testing.T) {
 	input := `return 5;
 	return 10;
@@ -63,20 +142,6 @@ func TestReturnStatements(t *testing.T) {
 		assert.IsType(t, &ast.ReturnStatement{}, stmt)
 		returnStmt := stmt.(*ast.ReturnStatement)
 		assert.Equal(t, "return", returnStmt.TokenLiteral())
-	}
-}
-
-func checkParseErrors(t *testing.T, p *Parser) {
-	errors := p.Errors()
-
-	assert.Len(t, errors, 0)
-
-	for _, msg := range errors {
-		t.Errorf("parser error: %s", msg)
-	}
-
-	if len(errors) > 0 {
-		t.FailNow()
 	}
 }
 
@@ -100,8 +165,7 @@ func TestIdentifierExpressions(t *testing.T) {
 		t.FailNow()
 	}
 
-	assert.Equal(t, "foobar", ident.Value)
-	assert.Equal(t, "foobar", ident.TokenLiteral())
+	testLiteralExpression(t, ident, "foobar")
 }
 
 func TestIntegerExpressions(t *testing.T) {
@@ -124,8 +188,7 @@ func TestIntegerExpressions(t *testing.T) {
 		t.FailNow()
 	}
 
-	assert.Equal(t, int64(5), ident.Value)
-	assert.Equal(t, "5", ident.TokenLiteral())
+	testLiteralExpression(t, ident, 5)
 }
 
 func TestParsePrefixExpressions(t *testing.T) {
@@ -157,25 +220,8 @@ func TestParsePrefixExpressions(t *testing.T) {
 		}
 
 		assert.Equal(t, tt.operator, exp.Operator)
-		testIntegerLiteral(t, exp.Right, tt.integerValue)
+		testLiteralExpression(t, exp.Right, tt.integerValue)
 	}
-}
-
-func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) {
-	assert.NotNil(t, il)
-	if il == nil {
-		t.FailNow()
-	}
-
-	integ, ok := il.(*ast.IntegerLiteral)
-	assert.NotNil(t, integ)
-	assert.True(t, ok)
-	if integ == nil {
-		t.FailNow()
-	}
-
-	assert.Equal(t, value, integ.Value)
-	assert.Equal(t, fmt.Sprintf("%d", value), integ.TokenLiteral())
 }
 
 func TestParsingInfixExpressions(t *testing.T) {
@@ -206,16 +252,7 @@ func TestParsingInfixExpressions(t *testing.T) {
 		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
 		assert.True(t, ok)
 
-		exp, ok := stmt.Expression.(*ast.InfixExpression)
-		assert.NotNil(t, exp)
-		assert.True(t, ok)
-		if exp == nil {
-			t.FailNow()
-		}
-
-		assert.Equal(t, tt.operator, exp.Operator)
-		testIntegerLiteral(t, exp.Left, tt.leftValue)
-		testIntegerLiteral(t, exp.Right, tt.rightValue)
+		testInfixExpression(t, stmt.Expression, tt.leftValue, tt.operator, tt.rightValue)
 	}
 }
 
